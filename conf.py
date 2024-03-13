@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.abspath('.'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Distributed Algorithm on AHCv2: chord'
-copyright = '2024, Your Name'
-author = 'Your Name'
+copyright = '2024, Egemen Berk Galatali'
+author = 'Egemen Berk Galatali'
 release = 'V1.0.0'
 version = release
 
