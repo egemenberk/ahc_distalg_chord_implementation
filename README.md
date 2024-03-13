@@ -21,15 +21,15 @@ or alternatively, you can checkout this project and run `make ahc`.
 There are some issues you have to address before starting implementation, please:
 
 
-- Rename the keyword `distalgname` in any foldername (/distalgname and /docs/disalgname), in any filenames (docs/distalgname/distalgname.rst) and in any fields in any file (all instances in index.rst) to a **meaningfull abbreviation** of your distributed algorithm. Note that doc/substitutions.rst defines a keywork |DistAlgName| that has to be changed as well.
+- Rename the keyword `chord` in any foldername (/chord and /docs/disalgname), in any filenames (docs/chord/chord.rst) and in any fields in any file (all instances in index.rst) to a **meaningfull abbreviation** of your distributed algorithm. Note that doc/substitutions.rst defines a keywork |chord| that has to be changed as well.
 - Use restructured text for documentation. There is a conf.py and the associated Makefile in the project's root directory. Running``make`` in the project's root directory will provide you a guide on how to build the html, pdf, epub, etc. documentation. For example, run `make html` and open `index.html`  under `_build/html` with a browser.
 - Do not edit anything in `_build`, `_static`, `_templates` directories.  
 - In `conf.py`  edit `project, copyright, author, release` fields.
 
 ## Documenting
 
-- Populate the rst files under the docs/distalgname: astract, algorithm, conclusion, introduction, results with the extension rst following restructured text syntax. The templates will guide you on what to write in each file. There is also a rubric for self-assessment.
-- List your modules in code.rst under docs/distalgname
+- Populate the rst files under the docs/chord: astract, algorithm, conclusion, introduction, results with the extension rst following restructured text syntax. The templates will guide you on what to write in each file. There is also a rubric for self-assessment.
+- List your modules in code.rst under docs/chord
 - An example implementation of the Snapshot algorithms are provided for your convenience, you can delete it.
 
 ## A helper tool for avoiding installation issues
