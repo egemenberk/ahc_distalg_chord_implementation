@@ -35,7 +35,7 @@
 \def\false{\textbf{F}}
 
 
-\author[John Doe]{John Doe\\\href{mailto:john@example.com}{john@example.com}}
+\author[Egemen Berk Galatali]{Egemen Berk Galatali\\\href{mailto:egemen.galatali@ceng.metu.edu.tr}{egemen.galatali@ceng.metu.edu.tr}}
 %\author[J.\,Doe \& J.\,Doe]
 %{%
 %  \texorpdfstring{
@@ -53,9 +53,8 @@
 %  {John Doe \& Jane Doe}
 %}
 
-\title[WINS Beamer Template]{WINS Lab Beamer Presentation Template}
-\subtitle[Short SubTitle]{How to Prepare a Nice Presentation}
-%\date{} 
+\title[WINS Beamer Template]{Chord: A Scalable Peer-to-Peer Lookup Protocol for Internet Applications}
+%\date{}
 
 \begin{document}
 
@@ -96,110 +95,164 @@
 %        \sectionpage
 %\end{frame}
 
-\begin{frame}{The problem}
-\framesubtitle{Tell a \alert{STORY} from the background to the conclusion}
-\begin{block}{The Problem Name} 
-Explain the problem here. Instead of using the term `The problem'', please use specific name for the problem. Tell us a story. Provide a picture for the scenario depicting the problem. Set the scene for average audience.
-\end{block}
-Spend at least \textbf{1.5-2 minutes per slide} on average.
+\begin{frame}{Chord}
+\framesubtitle{Distributed Key LookUp}
 
-The introduction should be something like ``I will be presenting title of talk. This is joint work with your colleagues or advisor at institution.'' 
+\begin{block}{Distributed LookUp}
+A fundamental problem that confronts peer-to-peer applications is
+to efficiently locate the node that stores a particular data item. This
+paper presents Chord, a distributed lookup protocol that addresses
+this problem. Chord provides support for just one operation: given
+a key, it maps the key onto a node
+\end{block}
+
 \note{}
 \end{frame}
-
 \section{The Contribution}
 \begin{frame}
-\frametitle{What is the solution/contribution}
-\framesubtitle{}
-Explain \textbf{YOUR} contributions. Go top-down. Give the brief introduction to the contributions at the beginning of the presentation. A slide should have no more than five to six lines of text or bullets. Prefer figures instead of text: A picture is worth a thousand words.
+\frametitle{Chord: A Scalable Peer-to-peer Lookup Service}
+\framesubtitle{Contributions and Key Ideas of the Chord Lookup Algorithm}
+
+Our contribution in this presentation is the exploration and explanation of the efficient and robust Chord Lookup Algorithm,
+a fundamental building block for distributed applications in dynamic peer-to-peer networks. Listed below are the key points we focus on:
+
 \begin{itemize}
-\item Communicate the Key Ideas
-\item Don’t get Bogged Down in Details
-\item Use a Top-down Approach
+\item The architecture of Chord algorithm, its working principles and mechanisms.
+\item Analysis of why Chord offers a \textbf{practical, scalable, and robust} way of service discovery and how it addresses load balancing and node failures.
+\item The application of Chord in real-world scenarios like file sharing systems, distributed databases, and content delivery networks.
 \end{itemize}
 
-The audience will remember at most one single message \textbf{Which message you want to audience to remember? Can you express this message in less than a minute in an elevator?}
+The main takeaway from this presentation is the understanding of how Chord efficiently solves the problem of searching for a value associated with a key in a distributed network, in $O(\log N)$ time.
 
 \end{frame}
+
 
 
 \section{Motivation/Importance}
+
 \begin{frame}
-\frametitle{Motivation/Importance}
-\framesubtitle{``Gain upon solving the problem, pain if not solved'' should be explained}
-Explain why the problem is so important. Throw in a little philosophy if necessary. How does the problem fit into the larger picture? If it involves a model of a real-world phenomenon, then how good is the model? What are its applications? What makes the problem nontrivial? You can return to these issues in the Conclusion, when you can re-address them with the benefit of hindsight.
+\frametitle{Motivation Behind the Chord Algorithm}
+\framesubtitle{The driving forces and importance of the Chord Lookup Algorithm}
+
+The Chord Lookup Algorithm arose from the necessity to handle complex issues faced by distributed, peer-to-peer systems. The algorithm establishes a performance-effective method to handle service location in dynamic network environments.
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Motivation Behind the Chord Algorithm}
+\framesubtitle{The driving forces and importance of the Chord Lookup Algorithm}
+
+\begin{itemize}
+  \item \textbf{Scalability:} Large peer-to-peer networks face scalability issues. Chord, with its $O(\log N)$ lookup time, offers a scalable solution.
+  \item \textbf{Robustness:} Chord robustly handles node failures and sudden departures, preserving the integrity of the network despite such events.
+  \item \textbf{Distributed Hashing:} Chord offers a distributed hashing method that evenly distributes load across nodes.
+  \item \textbf{Real-world Applications:} Chord has broad applicability, including file sharing systems, distributed databases, and content delivery networks.
+\end{itemize}
+
+Operating in the larger picture of improving efficiency and robustness in peer-to-peer network systems, Chord thus helps address the everyday pain points in managing and navigating massive distributed systems.
+
 \end{frame}
 
 \section{Background/Model/Definitions/Previous Works}
 
-
 \subsection{Model, Definitions}
 
-\frame{
+\begin{frame}
 \frametitle{Model, Definitions}
-\framesubtitle{Formal definition of a Stochastic Process}
-The use of terminology and jargon should be kept to a minimum, but is impossible to avoid entirely. All terms must be introduced early. It is also useful to remind the audience of the definitions at critical points later in the talk.
+\framesubtitle{Formal definition of the Chord Lookup Algorithm and its Components}
 
-Background and this slide can be combined....
-}
+\begin{itemize}
+\item \textbf{Chord:} A protocol that maps keys to nodes in a distributed network.
+\item \textbf{Node:} A machine or process participating in the Chord network.
+\item \textbf{Key:} An entity in the network that is assigned to a node.
+\item \textbf{Successor:} The node that follows a given node in the Chord ring, responsible for storing keys that hash to values up to its own hash value.
+\item \textbf{Predecessor:} The node that directly precedes a given node in the Chord ring.
+\item \textbf{Finger Table:} A routing table stored at each node that points to various nodes in the Chord ring for expedited lookups.
+\end{itemize}
 
-\subsection{Background, Previous Works}
-\begin{frame}{Background}
-Research is not usually carried out in a vacuum. There will almost always be other relevant or related work, which you should describe. Present an orderly synopsis of these previously- obtained results. A table is often used for this purpose. Be sure to mention the author of each paper and its date of publication. \textbf{Compare and contrast them with each other and with your paper.}
 \end{frame}
 
+\subsection{Background, Previous Works}
+
+\begin{frame}{Background - Previous Works}
+Several research works and protocols have explored distributed, peer-to-peer lookup services before the advent of Chord. Here are brief summaries about these distinct protocols:
+
+\begin{itemize}
+    \item \textbf{CAN:} A scalable, distributed infrastructure that provides hash table-like functionality on Internet-like scales.
+    \item \textbf{Tapestry:} A peer-to-peer overlay routing infrastructure offering efficient, scalable, location-independent routing of messages directly to nearby copies of an object or service.
+    \item \textbf{Pastry:} A scalable, decentralized object location and routing substrate for wide-area peer-to-peer applications, with a strong emphasis on fault tolerance.
+\end{itemize}
+
+Each protocol offered potential solutions, with their own strengths and weaknesses.
+\end{frame}
+
+\begin{frame}{Background - Chord Protocol}
+The Chord algorithm distinguishes itself from its predecessors with its simplicity, provable correctness, and provable performance. 
+
+\begin{itemize}
+    \item It offers a solution for efficient key lookups in a distributed network with $O(\log N)$ time complexity.
+    \item Each node in the Chord protocol maintains minimal state information - only $O(\log N)$ pointers. 
+    \item The protocol exhibits resilience even while dealing with node failures or network changes.
+\end{itemize}
+
+This makes the Chord algorithm a significant departure from previous works, offering substantial potential in the field of large, dynamic peer-to-peer networks.
+\end{frame}
 
 
 
 \section{Contribution}
 \subsection{Main Point 1}
-\begin{frame}{Main Point 1: A Figure}
-\framesubtitle{Abstract the Major Results}
-Describe the key results of the paper. You may present the statements of the major theorems, but not their proofs. You will probably have to get a little technical here, but do so gradually and carefully.
+\begin{frame}{Main Point 1: Chord Lookup Algorithm}
+\framesubtitle{Handling Key Lookup in a Distributed Network}
 
-\begin{figure}
-    \centering
-    \includegraphics[scale=0.5]{figures/Chick1.png}
-    \caption{Awesome Image}
-    \label{fig:awesome_image}
-\end{figure}
-\note{
-}
+The Chord Lookup Algorithm offers several key contributions in managing large-scale distributed networks:
+
+\begin{itemize}
+    \item \textbf{Simplicity:} Chord simplifies resource location in p2p networks using identifiers for nodes and keys.
+    \item \textbf{Scalability:} The algorithm scales logarithmically with nodes, enabling efficient routing.
+    \item \textbf{Robustness:} Chord maintains effective key lookups even under node join and leave operations.
+    \item \textbf{Fault Tolerance:} Chord operates efficiently even when certain nodes fail, thanks to successor lists.
+\end{itemize}
 \end{frame}
+%\begin{figure}
+%    \centering
+%    \includegraphics[scale=0.5]{figures/Chick1.png}
+%    \caption{Awesome Image}
+%    \label{fig:awesome_image}
+%\end{figure}
 
 
 \subsection{Main Point 2}
 
 \begin{frame}
-\frametitle{An Example Distributed Algorithm}
-\framesubtitle{Blind Flooding}
+\frametitle{Chord Lookup Algorithm}
+\framesubtitle{Efficient Key Lookup in Peer-to-Peer Networks}
 
-
-Blind flooding on an undirected graph is presented in Algorithm~\ref{alg:blindflooding}.
+The Chord algorithm for efficient key lookup in peer-to-peer networks is shown in Algorithm~\ref{alg:chordlookup}.
 
 \begin{center}
 \begin{algorithm}[H]
 	\scriptsize
-	\def\algorithmlabel{BlindFlooding}
+	\def\algorithmlabel{ChordLookup}
     \caption{\algorithmlabel\ algorithm}
-    \label{alg:blindflooding}
+    \label{alg:chordlookup}
     \begin{algorithmic}[1]
     	\Implement {\algorithmlabel}{cf} 
-    	\Use {LinkLayerBroadcast} {lbc} 
-    	\Events{Init, MessageFromTop, MessageFromBottom}
+    	\Use {DistributedOverlayNetwork} {don} 
+    	\Events{Join, Stabilize, Lookup}
 	\Need {}
 
-        \Event {Init}{}
+        \Event {Join}{\text{node } n}
+                \State \text{"Find node's position in the network and transfer keys."}
         		
-        \Event{MessageFromBottom} { $m$ }
-        		\Trig{lbc}{Broadcast} { $m$  }
-        		
-        \Event{MessageFromTop} { $m$ }	
-        		\Trig{lbc}{Broadcast} { $m$  }
+        \Event{Stabilize} {}
+                \State \text{"Periodically update finger tables and successor lists."} 
+
+        \Event{Lookup} { \text{key } k }	
+        		\State \text{"Find node responsible for key."} 
     \end{algorithmic}
 \end{algorithm}
 \end{center}
-
 
 \end{frame}
 
