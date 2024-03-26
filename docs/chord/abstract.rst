@@ -12,8 +12,7 @@ implemented on top of Chord by associating a key with each data
 item, and storing the key/data item pair at the node to which the
 key maps. Chord adapts efficiently as nodes join and leave the
 system, and can answer queries even if the system is continuously
-changing. Results from theoretical analysis, simulations, and ex-
-periments show that Chord is scalable, with communication cost
+changing. Results from theoretical analysis, simulations, and experiments show that Chord is scalable, with communication cost
 and the state maintained by each node scaling logarithmically with
 the number of Chord nodes. In this paper, we contribute by implementing
 Chord Algorithm on the AHCv2 platform with real-case scenario of storing documents in the place of keys,
