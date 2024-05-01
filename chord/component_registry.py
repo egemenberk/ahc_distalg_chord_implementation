@@ -17,8 +17,6 @@ class ComponentRegistry:
     components = {}
 
     def get_component_by_instance(self, instance):
-        """Find keys in the registry that correspond to the input instance."""
-
         list_of_keys = list()
         list_of_items = self.components.items()
         for item in list_of_items:
@@ -27,20 +25,18 @@ class ComponentRegistry:
         return list_of_keys
 
     def add_component(self, component):
-        """Add a component to the registry."""
-
-        key = component.component_name + str(component.component_instance_number)
+        key = component.componentname + str(component.componentinstancenumber)
         self.components[key] = component
 
     def get_component_by_key(self, component_name, component_instance_number):
-        """Retrieve a component from the registry by its key."""
-
         key = component_name + str(component_instance_number)
-        return self.components[key]
+        return self.components.get(key)
 
-    def init(self):
-        """Initialize all registered components."""
-
-        for item_key in self.components:
-            cmp = self.components[item_key]
-            cmp.input_queue.put_nowait(Event(self, EventTypes.INIT, None))
+    def get_arbitrary_component(self, componentname, componentinstancenumber):
+        # Return the first component in the registry that is not the same as the one specified
+        if len(self.components) == 1:
+            return list(self.components.values())[0]
+        key = componentname + str(componentinstancenumber)
+        for k, v in self.components.items():
+            if k != key:
+                return v
