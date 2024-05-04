@@ -10,7 +10,8 @@ SYSTEM_SIZE_BITS = 3
 
 
 class ApplicationLayerMessageTypes(Enum):
-    FIND_SUCCESSOR = "FIND_SUCCESSOR"
+    FIND_SUCCESSOR_REQ = "FIND_SUCCESSOR_REQ"
+    FIND_SUCCESSOR_RESP = "FIND_SUCCESSOR_RESP"
     FIND_PREDECESSOR = "FIND_PREDECESSOR"
     FIND_CLOSEST_PRECEDING_FINGER = "FIND_CLOSEST_PRECEDING_FINGER"
 
@@ -61,9 +62,7 @@ class ChordComponent(GenericModel):
     def __init__(self, componentname, componentinstancenumber, context=None, configuration_parameters=None, num_worker_threads=1, topology=None):
         super().__init__(componentname, componentinstancenumber, context, configuration_parameters, num_worker_threads, topology)
 
-        self.eventhandlers["messagefrombottom"] = self.on_message_received
-        self.eventhandlers["messagefromtop"] = self.on_message_received
-        self.eventhandlers["messagefrompeer"] = self.on_message_received
+        self.eventhandlers["msgfrompeer"] = self.on_message_from_peer
 
         self.predecessor = self
         self.node_id = componentinstancenumber
@@ -73,20 +72,32 @@ class ChordComponent(GenericModel):
     def __repr__(self):
         return f'ChordComponent(componentname={self.componentname}, componentinstancenumber={self.componentinstancenumber}, node_id={self.node_id})'
 
-    def on_message_received(self, eventobj: Event):
-        # This is a message from the successor node
+    def on_message_from_peer(self, eventobj: Event):
         chord_message = eventobj.eventcontent
         hdr = chord_message.header
+        payload = chord_message.payload
 
-        if hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR:
-            id = chord_message.payload.node
-            result = self._find_successor(id)
+        if hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ:
+            successor = self.find_successor(payload.node_id)
 
-        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_PREDECESSOR:
-            result = self.find_predecessor(chord_message)
+            # send response back to requestor
+            resp = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_SUCCESSOR_RESP, self.componentinstancenumber, hdr.messagefrom), successor)
+            print(f"on_message_from_peer: Sending response: {resp}")
+            self.send_peer(Event(self, EventTypes.MFRP, resp))
+        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR_RESP:
+            # process response by continuing join operation
+            print(f"on_message_from_peer: Continuing join: {payload.node_id}")
+            self.continue_join(payload)
 
-        if eventobj.fromchannel == ConnectorTypes.PEER:
-            self.send_peer(Event(self, EventTypes.MFRB, chord_message))
+    def continue_join(self, successor):
+        self.finger_table.entries[0].node = successor
+
+        self.registry.add_component(self)
+        self.predecessor = self.successor().predecessor
+        self.init_finger_table()
+        self.update_other_nodes()
+        self.stabilize()
+        self.fix_fingers()
 
     def successor(self):
         return self.finger_table.entries[0].node
@@ -104,9 +115,9 @@ class ChordComponent(GenericModel):
         sorted_components = sorted(self.registry.components.values(), key=lambda x: x.node_id)
         for node in sorted_components:
             if node_id < node.node_id:
-                print(f"find_successor: Node: {node_id} Successor: {node.node_id}")
+                #print(f"find_successor: Node: {node_id} Successor: {node.node_id}")
                 return node
-        print(f"find_successor: Node: {node_id} Successor: {sorted_components[0].node_id}")
+        #print(f"find_successor: Node: {node_id} Successor: {sorted_components[0].node_id}")
         return sorted_components[0]
 
     def stabilize(self):
@@ -166,16 +177,11 @@ class ChordComponent(GenericModel):
             self.predecessor = self
             self.registry.add_component(self)
         else:
-            #other_node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
             self.predecessor = None
-            self.finger_table.entries[0].node = self.find_successor(self.node_id)
-
-            self.registry.add_component(self)
-            self.predecessor = self.successor().predecessor
-            self.init_finger_table()
-            self.update_other_nodes()
-            self.stabilize()
-            self.fix_fingers()
+            #self.finger_table.entries[0].node = self.find_successor(self.node_id)
+            other_node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
+            req = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ, self.componentinstancenumber, other_node), self)
+            self.send_peer(Event(self, EventTypes.MFRP, req))
 
     def update_other_nodes(self):
         for i in range(SYSTEM_SIZE_BITS):
@@ -205,6 +211,8 @@ class Node(GenericModel):
 
         self.components.append(self.N)
         self.components.append(self.B)
+
+        #self.N.connect_me_to_component(self.B)
 
         self.N.P(self.B)
         self.B.P(self.N)
