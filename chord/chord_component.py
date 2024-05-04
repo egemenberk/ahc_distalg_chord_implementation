@@ -61,6 +61,7 @@ class FingerTable:
 
 def between(_id: int, left: int, right: int, inclusive_left=False, inclusive_right=True) -> bool:
     """
+    This code is taken from https://github.com/melzareix/chord-dht/blob/master/src/chord/helpers.py#L33-L46
     Check if _id lies between left and right in a circular ring.
     """
     ring_sz = 2**SYSTEM_SIZE_BITS
@@ -119,6 +120,7 @@ class ChordComponent(GenericModel):
         self.node_id = componentinstancenumber
         self.registry = ComponentRegistry()
         self.finger_table = FingerTable(self)
+        self.keys = set()
 
     def __repr__(self):
         return f"ChordComponent(componentname={self.componentname}, componentinstancenumber={self.componentinstancenumber}, node_id={self.node_id})"
@@ -127,6 +129,10 @@ class ChordComponent(GenericModel):
         chord_message = eventobj.eventcontent
         hdr = chord_message.header
         payload = chord_message.payload
+
+        # Check if the message is for this node
+        if hdr.messageto != self:
+            return
 
         if hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ:
             successor = self._find_successor(payload)
@@ -181,7 +187,7 @@ class ChordComponent(GenericModel):
             self.componentname, self.componentinstancenumber
         )
         req = GenericMessage(
-            ApplicationLayerMessageHeader(message_type, self.componentinstancenumber, other_node),
+            ApplicationLayerMessageHeader(message_type, self, other_node),
             node_id,
         )
         self.send_peer(Event(self, EventTypes.MFRP, req))
@@ -260,9 +266,6 @@ class ChordComponent(GenericModel):
             else:
                 node = self.find_successor(self.finger_table.entries[i + 1].start)
                 self.finger_table.update(i + 1, node)
-        import ipdb
-
-        ipdb.set_trace()
 
     def join(self):
         if not self.registry.components:
@@ -273,11 +276,15 @@ class ChordComponent(GenericModel):
             self.predecessor = self
             self.registry.add_component(self)
         else:
+            # Connect the new node as peer to the every other node in the network
+            for node in self.registry.components.values():
+                self.P(node)
+                node.P(self)
             self.predecessor = None
             self.init_finger_table()
             self.update_other_nodes()
-            # self.stabilize()
-            # self.fix_fingers()
+            self.stabilize()
+            self.fix_fingers()
 
     def update_other_nodes(self):
         node = self.registry.get_arbitrary_component(
@@ -322,6 +329,23 @@ class ChordComponent(GenericModel):
         ):
             self.predecessor = other_node
 
+    def put(self, key):
+        """
+        Stores a key in the distributed hash table.
+        The key is stored in the node that is responsible for the key.
+        """
+        node = self.find_successor(key)
+        node.keys.add(key)
+
+    def get(self, key):
+        """
+        The method finds the node that is responsible for the key and returns the key if it is stored in the node.
+        """
+        node = self.find_successor(key)
+        if key in node.keys:
+            return key
+        else:
+            return None
 
 class Node(GenericModel):
     def on_init(self, eventobj: Event):
@@ -345,23 +369,18 @@ class Node(GenericModel):
             topology,
         )
         # SUBCOMPONENTS
-        self.N = ChordComponent("N", 0)
-        self.B = ChordComponent("B", 1)
+        network = {}
+        network[0] = ChordComponent(componentname="Node", componentinstancenumber=0)
+        network[1] = ChordComponent(componentname="Node", componentinstancenumber=1)
+        network[3] = ChordComponent(componentname="Node", componentinstancenumber=3)
 
-        self.components.append(self.N)
-        self.components.append(self.B)
+        for node in network.values():
+            self.components.append(node)
 
-        # self.N.connect_me_to_component(self.B)
-
-        self.N.P(self.B)
-        self.B.P(self.N)
-
-        self.N.join()
-        print("N IS ADDED")
-        self.B.join()
-        import ipdb
-
-        ipdb.set_trace()
+        for node in network.values():
+            import ipdb
+            ipdb.set_trace()
+            node.join()
 
 
 def main():
