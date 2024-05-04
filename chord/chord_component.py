@@ -1,6 +1,8 @@
 from adhoccomputing.GenericModel import GenericModel
 from enum import Enum
 from adhoccomputing.Generics import Event, EventTypes, ConnectorTypes, GenericMessageHeader, GenericMessagePayload, GenericMessage
+import queue
+import asyncio
 from component_registry import ComponentRegistry
 from adhoccomputing.Generics import *
 from adhoccomputing.Experimentation.Topology import Topology
@@ -12,8 +14,10 @@ SYSTEM_SIZE_BITS = 3
 class ApplicationLayerMessageTypes(Enum):
     FIND_SUCCESSOR_REQ = "FIND_SUCCESSOR_REQ"
     FIND_SUCCESSOR_RESP = "FIND_SUCCESSOR_RESP"
-    FIND_PREDECESSOR = "FIND_PREDECESSOR"
-    FIND_CLOSEST_PRECEDING_FINGER = "FIND_CLOSEST_PRECEDING_FINGER"
+    FIND_PREDECESSOR_REQ = "FIND_PREDECESSOR_REQ"
+    FIND_PREDECESSOR_RESP = "FIND_PREDECESSOR_RESP"
+    FIND_CLOSEST_PRECEDING_FINGER_REQ = "FIND_CLOSEST_PRECEDING_FINGER_REQ"
+    FIND_CLOSEST_PRECEDING_FINGER_RESP = "FIND_CLOSEST_PRECEDING_FINGER_RESP"
 
 
 class ApplicationLayerMessageHeader(GenericMessageHeader):
@@ -55,6 +59,22 @@ class FingerTable:
         self.entries[i].node = s
 
 
+def between(_id: int, left: int, right: int, inclusive_left=False, inclusive_right=True) -> bool:
+    """
+    Check if _id lies between left and right in a circular ring.
+    """
+    ring_sz = 2 ** SYSTEM_SIZE_BITS
+    if left != right:
+        if inclusive_left:
+            left = (left - 1 + ring_sz) % ring_sz
+        if inclusive_right:
+            right = (right + 1) % ring_sz
+    if left < right:
+        return left < _id < right
+    else:
+        return (_id > max(left, right)) or (_id < min(left, right))
+
+
 class ChordComponent(GenericModel):
     # This is a simple implementation of the Chord protocol
     # The Chord protocol is a distributed lookup protocol that provides a way to locate a node in a network of nodes given its key.
@@ -63,6 +83,10 @@ class ChordComponent(GenericModel):
         super().__init__(componentname, componentinstancenumber, context, configuration_parameters, num_worker_threads, topology)
 
         self.eventhandlers["msgfrompeer"] = self.on_message_from_peer
+
+        self.find_successor_result_queue = queue.Queue()
+        self.find_predecessor_result_queue = queue.Queue()
+        self.find_closest_preceding_finger_result_queue = queue.Queue()
 
         self.predecessor = self
         self.node_id = componentinstancenumber
@@ -78,94 +102,95 @@ class ChordComponent(GenericModel):
         payload = chord_message.payload
 
         if hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ:
-            successor = self.find_successor(payload.node_id)
-
+            successor = self._find_successor(payload)
             # send response back to requestor
             resp = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_SUCCESSOR_RESP, self.componentinstancenumber, hdr.messagefrom), successor)
-            print(f"on_message_from_peer: Sending response: {resp}")
             self.send_peer(Event(self, EventTypes.MFRP, resp))
+
         elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_SUCCESSOR_RESP:
-            # process response by continuing join operation
-            print(f"on_message_from_peer: Continuing join: {payload.node_id}")
-            self.continue_join(payload)
+            print("Putting result in find_successor_result_queue")
+            self.find_successor_result_queue.put_nowait(payload)
+            print("EXCXJITS")
 
-    def continue_join(self, successor):
-        self.finger_table.entries[0].node = successor
+        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_PREDECESSOR_REQ:
+            predecessor = self._find_predecessor(payload)
+            resp = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_PREDECESSOR_RESP, self.componentinstancenumber, hdr.messagefrom), predecessor)
+            self.send_peer(Event(self, EventTypes.MFRP, resp))
 
-        self.registry.add_component(self)
-        self.predecessor = self.successor().predecessor
-        self.init_finger_table()
-        self.update_other_nodes()
-        self.stabilize()
-        self.fix_fingers()
+        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_PREDECESSOR_RESP:
+            print("Putting result in find_predecessor_result_queue")
+            self.find_predecessor_result_queue.put_nowait(payload)
+
+        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_CLOSEST_PRECEDING_FINGER_REQ:
+            closest_finger = self._closest_preceding_finger(payload)
+            resp = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_CLOSEST_PRECEDING_FINGER_RESP, self.componentinstancenumber, hdr.messagefrom), closest_finger)
+            self.send_peer(Event(self, EventTypes.MFRP, resp))
+
+        elif hdr.messagetype == ApplicationLayerMessageTypes.FIND_CLOSEST_PRECEDING_FINGER_RESP:
+            self.find_closest_preceding_finger_result_queue.put(payload)
 
     def successor(self):
         return self.finger_table.entries[0].node
 
+    def create_remote_event(self, message_type: ApplicationLayerMessageTypes, queue, node_id):
+        other_node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
+        req = GenericMessage(ApplicationLayerMessageHeader(message_type, self.componentinstancenumber, other_node), node_id)
+        self.send_peer(Event(self, EventTypes.MFRP, req))
+        return queue.get()
+
     def find_successor(self, node_id):
-
-        """
-        if len(self.registry.components) <= 2:
-            for node in self.registry.components.values():
-                if node.node_id > node_id:
-                    return node
-        other_node = self.find_predecessor(node_id)
-        return other_node.successor()
-        """
-        sorted_components = sorted(self.registry.components.values(), key=lambda x: x.node_id)
-        for node in sorted_components:
-            if node_id < node.node_id:
-                #print(f"find_successor: Node: {node_id} Successor: {node.node_id}")
-                return node
-        #print(f"find_successor: Node: {node_id} Successor: {sorted_components[0].node_id}")
-        return sorted_components[0]
-
-    def stabilize(self):
-        x = self.successor().predecessor
-        if self.node_id < x.node_id < self.successor().node_id:
-            self.finger_table.entries[0].node = x
-        self.successor().notify(self)
-
-    def notify(self, other_node):
-        if self.predecessor is None or self.predecessor.node_id < other_node.node_id < self.node_id:
-            self.predecessor = other_node
+        return self.create_remote_event(ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ, self.find_successor_result_queue, node_id)
 
     def find_predecessor(self, node_id):
-        """
-        other_node = self
-        while not (other_node.node_id < node_id <= other_node.successor().node_id):
-            other_node = other_node.closest_preceding_finger(node_id)
-        return other_node
-        """
-        sorted_components = sorted(self.registry.components.values(), key=lambda x: x.node_id, reverse=True)
-        for node in sorted_components:
-            if node_id > node.node_id:
-                print(f"find_predecessor: Node: {node_id} Predecessor: {node.node_id}")
-                return node
-        print(f"find_predecessor: Node: {node_id} Predecessor: {sorted_components[0].node_id}")
-        return sorted_components[0]
+        return self.create_remote_event(ApplicationLayerMessageTypes.FIND_PREDECESSOR_REQ, self.find_predecessor_result_queue, node_id)
 
     def closest_preceding_finger(self, node_id):
+        return self.create_remote_event(ApplicationLayerMessageTypes.FIND_CLOSEST_PRECEDING_FINGER_REQ, self.find_closest_preceding_finger_result_queue, node_id)
+
+    def _find_successor(self, node_id):
+        if self.node_id == self.successor().node_id:
+            return self
+        else:
+            predecessor = self._find_predecessor(node_id)
+            return predecessor.successor()
+
+    def _find_predecessor(self, node_id):
+        other_node = self
+        while not between(node_id, other_node.node_id, other_node.successor().node_id, inclusive_left=False, inclusive_right=True):
+            """
+            if node_id == other_node.node_id:
+                return other_node.predecessor
+            if node_id == other_node.successor().node_id:
+                return other_node
+            """
+            other_node = other_node._closest_preceding_finger(node_id)
+        return other_node
+
+    def _closest_preceding_finger(self, node_id):
         for i in range(SYSTEM_SIZE_BITS - 1, -1, -1):
-            if self.node_id < self.finger_table.entries[i].node.node_id < node_id:
+            #if self.node_id < self.finger_table.entries[i].node.node_id < node_id:
+            if between(self.finger_table.entries[i].node.node_id, self.node_id, node_id, inclusive_left=False, inclusive_right=False):
                 return self.finger_table.entries[i].node
         return self
 
     def init_finger_table(self):
-        #other_node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
-        # TODO make other_node call over the network
-        node = self.find_successor(self.finger_table.entries[0].start)
-        self.finger_table.update(0, node)
+        succ_node = self.find_successor(self.finger_table.entries[0].start)
+        print(f"FOUND SUCCESSOR: {succ_node.node_id}")
+        self.finger_table.update(0, succ_node)
+
+        self.registry.add_component(self)
         successor = self.successor()
         self.predecessor = successor.predecessor
         successor.predecessor = self
-        #self.predecessor.finger_table.entries[0].node = self
+        succ_node.finger_table.entries[0].node = self
         for i in range(SYSTEM_SIZE_BITS-1):
-            if self.node_id <= self.finger_table.entries[i+1].start <= self.finger_table.entries[i].node.node_id:
+            #if self.node_id <= self.finger_table.entries[i+1].start < self.finger_table.entries[i].node.node_id:
+            if between(self.finger_table.entries[i+1].start, self.node_id, self.finger_table.entries[i].node.node_id, inclusive_left=True, inclusive_right=False):
                 self.finger_table.entries[i+1].node = self.finger_table.entries[i].node
             else:
                 node = self.find_successor(self.finger_table.entries[i+1].start)
                 self.finger_table.update(i+1, node)
+        import ipdb; ipdb.set_trace()
 
     def join(self):
         # We assume that there is already at least one node in the network
@@ -178,18 +203,20 @@ class ChordComponent(GenericModel):
             self.registry.add_component(self)
         else:
             self.predecessor = None
-            #self.finger_table.entries[0].node = self.find_successor(self.node_id)
-            other_node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
-            req = GenericMessage(ApplicationLayerMessageHeader(ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ, self.componentinstancenumber, other_node), self)
-            self.send_peer(Event(self, EventTypes.MFRP, req))
+            self.init_finger_table()
+            self.update_other_nodes()
+            #self.stabilize()
+            #self.fix_fingers()
 
     def update_other_nodes(self):
+        node = self.registry.get_arbitrary_component(self.componentname, self.componentinstancenumber)
         for i in range(SYSTEM_SIZE_BITS):
-            p = self.find_predecessor((self.node_id - 2**i) % 2**SYSTEM_SIZE_BITS)
-            p.update_finger_table(self, i)
+            p = node.find_predecessor((node.node_id - 2**i) % 2**SYSTEM_SIZE_BITS)
+            p.update_finger_table(node, i)
 
     def update_finger_table(self, s, i):
-        if self.node_id <= s.node_id < self.finger_table.entries[i].node.node_id:
+        #if self.node_id <= s.node_id < self.finger_table.entries[i].node.node_id:
+        if between(s.node_id, self.node_id, self.finger_table.entries[i].node.node_id, inclusive_left=True, inclusive_right=False):
             self.finger_table.update(i, s)
             p = self.predecessor
             p.update_finger_table(s, i)
@@ -197,7 +224,17 @@ class ChordComponent(GenericModel):
     def fix_fingers(self):
         for node in self.registry.components.values():
             for i in range(SYSTEM_SIZE_BITS):
-                node.finger_table.update(i, node.find_successor(node.finger_table.entries[i].start - 1))
+                node.finger_table.update(i, node._find_successor(node.finger_table.entries[i].start))
+
+    def stabilize(self):
+        x = self.successor().predecessor
+        if self.node_id < x.node_id < self.successor().node_id:
+            self.finger_table.entries[0].node = x
+        self.successor().notify(self)
+
+    def notify(self, other_node):
+        if self.predecessor is None or between(other_node.node_id, self.predecessor.node_id, self.node_id, inclusive_left=False, inclusive_right=False):
+            self.predecessor = other_node
 
 class Node(GenericModel):
     def on_init(self, eventobj: Event):
