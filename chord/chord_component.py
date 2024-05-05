@@ -1,13 +1,12 @@
 from adhoccomputing.GenericModel import GenericModel
-import queue
+import matplotlib.pyplot as plt
+from queue import Queue, Empty
 from component_registry import ComponentRegistry
 from adhoccomputing.Generics import *
 from adhoccomputing.Experimentation.Topology import Topology
-import logging
 
-total_nodes = 100
+total_nodes = 50
 SYSTEM_SIZE_BITS = 7
-logging.basicConfig(level=logging.ERROR)
 
 class ApplicationLayerMessageTypes(Enum):
     FIND_SUCCESSOR_REQ = "FIND_SUCCESSOR_REQ"
@@ -113,9 +112,9 @@ class ChordComponent(GenericModel):
 
         self.eventhandlers["msgfrompeer"] = self.on_message_from_peer
 
-        self.find_successor_result_queue = queue.Queue()
-        self.find_predecessor_result_queue = queue.Queue()
-        self.find_closest_preceding_finger_result_queue = queue.Queue()
+        self.find_successor_result_queue = Queue()
+        self.find_predecessor_result_queue = Queue()
+        self.find_closest_preceding_finger_result_queue = Queue()
 
         self.predecessor = None
         self.node_id = componentinstancenumber
@@ -183,16 +182,30 @@ class ChordComponent(GenericModel):
     def successor(self):
         return self.finger_table.entries[0].node
 
+    def inner_queue_handler(self, queue):
+        return queue.get()
+
     def create_remote_event(self, message_type: ApplicationLayerMessageTypes, queue, node_id):
+        #import ipdb; ipdb.set_trace()
         other_node = self.registry.get_arbitrary_component(
             self.componentname, self.componentinstancenumber
         )
+        if other_node == self:
+            if message_type == ApplicationLayerMessageTypes.FIND_SUCCESSOR_REQ:
+                return self._find_successor(node_id)
+            elif message_type == ApplicationLayerMessageTypes.FIND_PREDECESSOR_REQ:
+                return self._find_predecessor(node_id)
+            elif message_type == ApplicationLayerMessageTypes.FIND_CLOSEST_PRECEDING_FINGER_REQ:
+                return self._closest_preceding_finger(node_id)
         req = GenericMessage(
             ApplicationLayerMessageHeader(message_type, self, other_node),
             node_id,
         )
         self.send_peer(Event(self, EventTypes.MFRP, req))
-        return queue.get()
+        try:
+            return queue.get(timeout=0.1)  # Add timeout here
+        except Empty:    # handle exception here
+            return None
 
     def find_successor(self, node_id):
         return self.create_remote_event(
@@ -216,13 +229,15 @@ class ChordComponent(GenericModel):
         )
 
     def _find_successor(self, node_id):
-        if self.node_id == self.successor().node_id:
+        self.registry.find_successor += 1
+        if self.node_id == self.successor().node_id or self.node_id == self.predecessor.node_id:
             return self
         else:
             predecessor = self._find_predecessor(node_id)
             return predecessor.successor()
 
     def _find_predecessor(self, node_id):
+        self.registry.find_predecessor += 1
         other_node = self
         while not between(
             node_id,
@@ -235,6 +250,7 @@ class ChordComponent(GenericModel):
         return other_node
 
     def _closest_preceding_finger(self, node_id):
+        self.registry.closest_preceding_finger += 1
         for i in range(SYSTEM_SIZE_BITS - 1, -1, -1):
             if between(
                 self.finger_table.entries[i].node.node_id,
@@ -268,6 +284,10 @@ class ChordComponent(GenericModel):
                 node = self.find_successor(self.finger_table.entries[i + 1].start)
                 self.finger_table.update(i + 1, node)
 
+    def make_peer(self, node):
+        self.P(node)
+        node.P(self)
+
     def join(self):
         if not self.registry.components:
             # If there are no components in the registry, add this component to the registry
@@ -279,8 +299,7 @@ class ChordComponent(GenericModel):
         else:
             # Connect the new node as peer to the every other node in the network
             for node in self.registry.components.values():
-                self.P(node)
-                node.P(self)
+                self.make_peer(node)
             self.predecessor = None
             self.init_finger_table()
             self.update_other_nodes()
@@ -365,7 +384,7 @@ class Node(GenericModel):
         componentinstancenumber,
         context=None,
         configurationparameters=None,
-        num_worker_threads=1,
+        num_worker_threads=5,
         topology=None,
     ):
         super().__init__(
@@ -378,19 +397,36 @@ class Node(GenericModel):
         )
         # SUBCOMPONENTS
         network = {}
-        for i in range(total_nodes):
-            node = ChordComponent(componentname="Node", componentinstancenumber=i)
-            network[i] = node
+        for i in range(2**SYSTEM_SIZE_BITS-1):
+            node_id = i
+            node = ChordComponent(componentname="Node", componentinstancenumber=node_id)
+            network[node_id] = node
             self.components.append(node)
 
         for node in network.values():
             node.join()
-        import ipdb; ipdb.set_trace()
+            print(f"Node {node.node_id} has joined")
+
+        keys = [i for i in range(2**SYSTEM_SIZE_BITS)]
+        path_lengths = []
+        for key in keys:
+            node.put(key)
+        for key in keys:
+            node.registry.find_successor = 0
+            node.registry.find_predecessor = 0
+            node.registry.closest_preceding_finger = 0
+            node.find_successor(key)
+            path_lengths.append(node.registry.find_successor + node.registry.find_predecessor + node.registry.closest_preceding_finger)
+        plt.hist(path_lengths, density=True, bins=SYSTEM_SIZE_BITS)  # 'auto' will automatically determine the number of bins
+        plt.title("Histogram of Path Lengths")
+        plt.xlabel("Path Length")
+        plt.ylabel("Frequency")
+        plt.show()
         pass
 
 
 def main():
-    setAHCLogLevel(DEBUG)
+    setAHCLogLevel(ERROR)
     topo = Topology()
     topo.construct_single_node(Node, 0)
     topo.start()
@@ -400,13 +436,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    """
-    network[0] = ChordComponent(componentname="Node", componentinstancenumber=0)
-    network[1] = ChordComponent(componentname="Node", componentinstancenumber=1)
-    network[3] = ChordComponent(componentname="Node", componentinstancenumber=3)
-    network[6] = ChordComponent(componentname="Node", componentinstancenumber=6)
-    
-    for node in network.values():
-        self.components.append(node)
-    """

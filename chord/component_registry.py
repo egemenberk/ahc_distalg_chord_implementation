@@ -15,6 +15,9 @@ class ComponentRegistry:
     """A singleton class that maintains a registry of components."""
 
     components = {}
+    find_successor = 0
+    find_predecessor = 0
+    closest_preceding_finger = 0
 
     def get_component_by_instance(self, instance):
         list_of_keys = list()
