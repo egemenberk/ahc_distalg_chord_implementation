@@ -3,10 +3,11 @@ import queue
 from component_registry import ComponentRegistry
 from adhoccomputing.Generics import *
 from adhoccomputing.Experimentation.Topology import Topology
+import logging
 
-
-SYSTEM_SIZE_BITS = 3
-
+total_nodes = 100
+SYSTEM_SIZE_BITS = 7
+logging.basicConfig(level=logging.ERROR)
 
 class ApplicationLayerMessageTypes(Enum):
     FIND_SUCCESSOR_REQ = "FIND_SUCCESSOR_REQ"
@@ -116,7 +117,7 @@ class ChordComponent(GenericModel):
         self.find_predecessor_result_queue = queue.Queue()
         self.find_closest_preceding_finger_result_queue = queue.Queue()
 
-        self.predecessor = self
+        self.predecessor = None
         self.node_id = componentinstancenumber
         self.registry = ComponentRegistry()
         self.finger_table = FingerTable(self)
@@ -250,10 +251,10 @@ class ChordComponent(GenericModel):
         self.finger_table.update(0, succ_node)
 
         self.registry.add_component(self)
-        successor = self.successor()
-        self.predecessor = successor.predecessor
-        successor.predecessor = self
-        succ_node.finger_table.entries[0].node = self
+        self.predecessor = succ_node.predecessor
+        succ_node.predecessor = self
+        self.predecessor.finger_table.update(0, self)
+        # succ_node.finger_table.entries[0].node = self
         for i in range(SYSTEM_SIZE_BITS - 1):
             if between(
                 self.finger_table.entries[i + 1].start,
@@ -310,12 +311,18 @@ class ChordComponent(GenericModel):
         for node in self.registry.components.values():
             for i in range(SYSTEM_SIZE_BITS):
                 node.finger_table.update(
-                    i, node._find_successor(node.finger_table.entries[i].start)
+                    i, node.find_successor(node.finger_table.entries[i].start)
                 )
 
     def stabilize(self):
         x = self.successor().predecessor
-        if self.node_id < x.node_id < self.successor().node_id:
+        if between(
+            x.node_id,
+            self.node_id,
+            self.successor().node_id,
+            inclusive_left=False,
+            inclusive_right=False,
+        ):
             self.finger_table.entries[0].node = x
         self.successor().notify(self)
 
@@ -347,6 +354,7 @@ class ChordComponent(GenericModel):
         else:
             return None
 
+
 class Node(GenericModel):
     def on_init(self, eventobj: Event):
         pass
@@ -370,17 +378,15 @@ class Node(GenericModel):
         )
         # SUBCOMPONENTS
         network = {}
-        network[0] = ChordComponent(componentname="Node", componentinstancenumber=0)
-        network[1] = ChordComponent(componentname="Node", componentinstancenumber=1)
-        network[3] = ChordComponent(componentname="Node", componentinstancenumber=3)
-
-        for node in network.values():
+        for i in range(total_nodes):
+            node = ChordComponent(componentname="Node", componentinstancenumber=i)
+            network[i] = node
             self.components.append(node)
 
         for node in network.values():
-            import ipdb
-            ipdb.set_trace()
             node.join()
+        import ipdb; ipdb.set_trace()
+        pass
 
 
 def main():
@@ -394,3 +400,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    """
+    network[0] = ChordComponent(componentname="Node", componentinstancenumber=0)
+    network[1] = ChordComponent(componentname="Node", componentinstancenumber=1)
+    network[3] = ChordComponent(componentname="Node", componentinstancenumber=3)
+    network[6] = ChordComponent(componentname="Node", componentinstancenumber=6)
+    
+    for node in network.values():
+        self.components.append(node)
+    """
